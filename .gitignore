@@ -3,7 +3,7 @@ gregorforge-authorizations/
 data/
 sessions/
 reports/
-workflows/
+/workflows/
 .opencode.env
 *.env
 # OS metadata. A drive-by PR (#37) once added two of these because nothing
@@ -24,3 +24,5 @@ desktop.ini
 .idea/
 *.swp
 *~
+__pycache__/
+*.py[cod]

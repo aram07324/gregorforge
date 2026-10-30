@@ -1,0 +1,22 @@
+{
+  "name": "GregorForge Security Checks",
+  "url": "https://github.com/aram07324/gregorforge",
+  "hook_attributes": {
+    "url": "https://example.invalid/github/webhook"
+  },
+  "redirect_url": "https://example.invalid/github/callback",
+  "callback_urls": [
+    "https://example.invalid/github/callback"
+  ],
+  "public": true,
+  "default_permissions": {
+    "checks": "write",
+    "contents": "read",
+    "metadata": "read",
+    "pull_requests": "read"
+  },
+  "default_events": [
+    "pull_request",
+    "check_suite"
+  ]
+}
