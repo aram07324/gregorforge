@@ -135,16 +135,17 @@ def _github_pr(opener: urllib.request.OpenerDirector, repository: str, number: i
     return _read_json_response(opener, request)
 
 
-def _provider_endpoint(value: str, repository: str, number: int) -> str:
+def _provider_endpoint(value: str, repository: str, number: int, head_sha: str) -> str:
     try:
         base = normalize_origin(value)
     except TargetPolicyError as exc:
         raise PreviewCheckError("preview provider must be a configured HTTPS origin") from exc
     owner, repo = _validated_repository(repository)
-    return (
+    endpoint = (
         f"{base}/v1/previews/github/{urllib.parse.quote(owner)}/"
         f"{urllib.parse.quote(repo)}/{number}"
     )
+    return f"{endpoint}?head_sha={urllib.parse.quote(head_sha)}"
 
 
 def _fetch_attestation(
@@ -444,7 +445,7 @@ def _run_attested_preview_check(
     provider_token: str,
     signing_key: str,
 ) -> CheckResult:
-    endpoint = _provider_endpoint(provider_url, repository, pull_request)
+    endpoint = _provider_endpoint(provider_url, repository, pull_request, head_sha)
     attestation = _fetch_attestation(opener, endpoint, provider_token)
     origin = verify_attestation(
         attestation,

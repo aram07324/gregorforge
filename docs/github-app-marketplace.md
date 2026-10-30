@@ -49,44 +49,101 @@ ownership, legal authorization, or overall security.
 The preview scanner is **not safe to enable on a general-purpose runner**.
 Before enabling it:
 
+### Create the Vercel preview target and provider
+
+The repository includes a small static preview target and a Vercel Function at
+`preview-site/api/v1/previews/github/[owner]/[repo]/[pull_request].js`. The
+function asks the Vercel API for ready deployments of the current GitHub PR
+head SHA, requires the repository and PR metadata to match, and signs the
+deployment URL and commit SHA. It never accepts a target URL from the request.
+The scanner separately compares the attested SHA against GitHub's current PR
+head.
+
+1. Import `aram07324/gregorforge` as a Vercel project. Set the project **Root
+   Directory** to `preview-site`, the production branch to `main`, and enable
+   GitHub Preview deployments. Use the `Other` framework preset if prompted.
+2. Deploy `main` and confirm that the static page and API function are
+   available on the production deployment. The provider route is
+   `https://<production-origin>/api/v1/previews/github/aram07324/gregorforge/<PR-number>?head_sha=<current-PR-SHA>`.
+3. Add these variables/secrets to the Vercel project's **Production** environment
+   only. Do not expose them to Preview deployments:
+   - `GREGORFORGE_PREVIEW_PROVIDER_TOKEN`: a newly generated random bearer token
+     of at least 32 bytes.
+   - `GREGORFORGE_PREVIEW_ATTESTATION_KEY`: a separate random key with at least
+     32 bytes of entropy.
+   - `VERCEL_TOKEN`: a dedicated Vercel API token for the account/team that
+     owns the project. Restrict its access as much as Vercel allows.
+   - `VERCEL_TEAM_ID`: the owning team ID when this is a team project; omit for
+     a personal project.
+4. Enable Vercel's **System Environment Variables** setting so the function can
+   read the automatically populated `VERCEL_PROJECT_ID`. Redeploy Production
+   after adding the variables. Keep the provider tokens and
+   signing key out of Git, Vercel Preview environment variables, and pull
+   requests. Configure the matching provider token and signing key later as
+   `preview-scan` GitHub Environment secrets.
+
+Each Vercel deployment has a unique origin. For each manual scan, set
+`GREGORFORGE_AUTHORIZED_TARGETS` to a JSON array containing the exact origin
+for that PR's completed Vercel Preview deployment, for example
+`["https://project-git-feature-aram07324.vercel.app"]`. Do not use wildcard
+domains. If Vercel returns a new deployment origin, update the exact allowlist
+before dispatching the check.
+
+### Provision and isolate the runner
+
 1. Provision an ephemeral, single-job Linux runner labelled
    `gregorforge-preview-scan`. It must have no Docker socket, cloud metadata
    access, persistent credentials, or shared workspace with other jobs.
-2. Enforce default-deny egress outside the workflow. Permit only the GitHub
-   Actions control plane and endpoints required to download the pinned actions
-   and Python runtime, the GitHub API, the configured preview-provider API,
-   DNS required by those services, and the exact attested preview origin on
-   HTTPS. The runner/network boundary must
-   prevent private, loopback, link-local, and metadata destinations even if
-   application-level checks fail. The workflow variable
-   `GREGORFORGE_PREVIEW_EGRESS_LOCKED=true` is an operator assertion, not a
-   firewall and not proof that egress is restricted.
-3. Configure the `preview-scan` GitHub Environment with required reviewers,
-   prevent self-review where possible, and allow deployment only from the
-   protected `main` branch. Do not place these secrets in repository-wide
+2. Register it only to this repository (or a runner group restricted to this
+   repository), with the exact labels `self-hosted`, `linux`, `x64`, and
+   `gregorforge-preview-scan`. Configure the runner as ephemeral and single-use.
+   GitHub warns that self-hosted runners on public repositories can be exposed
+   to dangerous code from pull requests. This workflow checks out only trusted
+   `main` code and has no PR trigger, but the runner must still never be shared
+   with builds or arbitrary repository workflows.
+3. Put the VM in a private subnet with no inbound public SSH. Enforce outbound
+   traffic at the OCI network boundary (for example through an OCI Network
+   Firewall and a default-deny route); do not rely only on host firewall rules
+   or the workflow's variables. Allow only the GitHub Actions control plane and
+   action/runtime download endpoints, GitHub API, this Vercel provider origin,
+   DNS needed for those services, and HTTPS to the exact preview origin being
+   scanned. Block private, loopback, link-local, and cloud metadata destinations
+   independently of the Python scanner. Test the controls from the runner.
+   OCI egress allowlists must account for GitHub's changing service IP ranges;
+   maintain the rules as those ranges change.
+4. Configure the `preview-scan` GitHub Environment with required reviewers,
+   prevent self-review, and allow deployment only from the `main` branch.
+   Verify the protection rule is active before adding secrets. Do not place
+   these secrets in repository-wide
    secrets or PR-triggered workflows.
-4. Configure repository variables:
+5. Configure repository variables:
    - `GREGORFORGE_PREVIEW_CHECK_ENABLED=true`
    - `GREGORFORGE_PREVIEW_EGRESS_LOCKED=true` only after testing the network
      boundary
-   - `GREGORFORGE_PREVIEW_PROVIDER_URL=https://<trusted-provider-origin>`
-   - `GREGORFORGE_AUTHORIZED_TARGETS` as a JSON array containing the exact
-     preview origins that provider is allowed to attest
-5. Add Environment secrets:
+   - `GREGORFORGE_PREVIEW_PROVIDER_URL=https://<production-origin>` with no
+     path or trailing slash
+   - `GREGORFORGE_AUTHORIZED_TARGETS` as a JSON array containing only the exact
+     Vercel Preview origin for the PR being checked
+6. Add Environment secrets:
    - `GREGORFORGE_PREVIEW_PROVIDER_TOKEN`: read-only credential for the
      provider's one-preview lookup endpoint
    - `GREGORFORGE_PREVIEW_ATTESTATION_KEY`: random key with at least 32 bytes
      of entropy, shared securely with the provider. Rotate it if exposed.
-6. Dispatch **Authorized preview security check** from `main`, enter an open
+7. Dispatch **Authorized preview security check** from `main`, enter an open
    PR number, and approve the `preview-scan` environment deployment. The job
    verifies the PR base, open/non-draft state, current head commit, attestation
    signature/expiry, exact origin allowlist, and PR head again immediately
    before connecting.
 
+The repository is public. Do not treat the self-hosted runner as a general
+CI worker. If OCI cannot provide independently enforced egress restrictions
+and a one-job runner lifecycle, leave `GREGORFORGE_PREVIEW_CHECK_ENABLED`
+unset and do not register the runner.
+
 ### Preview-provider contract
 
-`GET /v1/previews/github/{owner}/{repo}/{pull_request}` must return a bounded
-JSON object containing exactly these fields:
+`GET /v1/previews/github/{owner}/{repo}/{pull_request}?head_sha={current_sha}`
+must return a bounded JSON object containing exactly these fields:
 
 ```json
 {

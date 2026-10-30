@@ -316,8 +316,8 @@ class PreviewScanTests(unittest.TestCase):
 class AttestationTests(unittest.TestCase):
     def test_provider_endpoint_accepts_only_an_https_origin(self):
         self.assertEqual(
-            _provider_endpoint("https://provider.example/", "owner/repo", 42),
-            "https://provider.example/v1/previews/github/owner/repo/42",
+            _provider_endpoint("https://provider.example/", "owner/repo", 42, "a" * 40),
+            f"https://provider.example/v1/previews/github/owner/repo/42?head_sha={'a' * 40}",
         )
         for value in (
             "http://provider.example",
@@ -326,7 +326,7 @@ class AttestationTests(unittest.TestCase):
             "https://provider.example?debug=1",
         ):
             with self.subTest(value=value), self.assertRaises(PreviewCheckError):
-                _provider_endpoint(value, "owner/repo", 42)
+                _provider_endpoint(value, "owner/repo", 42, "a" * 40)
 
     def test_accepts_valid_short_lived_attestation(self):
         attestation, key, now = signed_attestation()

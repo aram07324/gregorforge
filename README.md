@@ -128,7 +128,7 @@ Built for **security teams**, **DevSecOps engineers**, **red teamers** and **eth
 
 Run GregorForge where you already build — in CI/CD, your IDE, automation and SecOps. Integrations marked **OSS + Pro** work with the open-source edition (local CLI + JSON); the Pro-only ones consume the [GregorForge Pro](#-gregorforge-pro--paid-edition-web-dashboard-and-automated-remediation) REST API (live dashboard, remediation→PR).
 
-**Experimental GitHub integration:** pull requests run policy tests only. A separate manually dispatched, protected workflow can perform a single read-only security-header check against an operator-authorized preview after validating a short-lived provider attestation. PR-provided target values are never scanned. See the [security and setup requirements](docs/github-app-marketplace.md).
+**Experimental GitHub integration:** pull requests run policy tests only. A separate manually dispatched, protected workflow can perform a single read-only security-header check against an operator-authorized preview after validating a short-lived provider attestation. The `preview-site/` directory provides a small Vercel deployment target and attestation endpoint; it does not scan PR code or run the full pentest scanner. PR-provided target values are never scanned. See the [security and setup requirements](docs/github-app-marketplace.md).
 
 | Platform | What it does | Get it | Edition | Tutorial |
 |---|---|---|---|---|
