@@ -14,11 +14,11 @@ product.
   the repository variable `GREGORFORGE_AUTHORIZED_TARGETS`, formatted as a JSON
   array, for example `["https://staging.example.com"]`.
 - The composite action can be reused to perform this same preflight.
-- A separate **manual** preview workflow can scan an already-deployed preview
-  after a protected-environment reviewer approves the run and a trusted
-  provider attests to its exact PR commit and origin. It sends one `HEAD /`
-  request and reports security-header and cookie-attribute checks as a GitHub
-  Check Run.
+- A separate **manual-dispatch** preview workflow can scan an already-deployed
+  preview after a trusted provider attests to its exact PR commit and origin.
+  It sends one `HEAD /` request and reports security-header and cookie-attribute
+  checks as a GitHub Check Run. The workflow does not declare a GitHub
+  Environment or require reviewer approval.
 
 The PR-triggered workflow and the basic preflight are intentionally
 non-networking. **No `pull_request` event starts a scan.** Manual preview
@@ -44,7 +44,7 @@ ownership, legal authorization, or overall security.
 3. Use pull-request runs to test policy changes. Do not add secrets or scanner
    execution to the `pull_request` job.
 
-## Protected preview-check setup
+## Preview-check setup
 
 The preview scanner is **not safe to enable on a general-purpose runner**.
 Before enabling it:
@@ -79,10 +79,12 @@ head.
    read the automatically populated `VERCEL_PROJECT_ID`. Redeploy Production
    after adding the variables. Keep the provider tokens and
    signing key out of Git, Vercel Preview environment variables, and pull
-   requests. Configure the matching provider token and signing key later as
-   `preview-scan` GitHub Environment secrets.
+   requests. Configure the matching provider token and signing key as
+   repository Actions secrets named `GREGORFORGE_PREVIEW_PROVIDER_TOKEN` and
+   `GREGORFORGE_PREVIEW_ATTESTATION_KEY`. The workflow references them only in
+   its manually dispatched job on `main`.
 
-Each Vercel deployment has a unique origin. For each manual scan, set
+Each Vercel deployment has a unique origin. For each manually dispatched scan, set
 `GREGORFORGE_AUTHORIZED_TARGETS` to a JSON array containing the exact origin
 for that PR's completed Vercel Preview deployment, for example
 `["https://project-git-feature-aram07324.vercel.app"]`. Do not use wildcard
@@ -111,11 +113,10 @@ before dispatching the check.
    independently of the Python scanner. Test the controls from the runner.
    OCI egress allowlists must account for GitHub's changing service IP ranges;
    maintain the rules as those ranges change.
-4. Configure the `preview-scan` GitHub Environment with required reviewers,
-   prevent self-review, and allow deployment only from the `main` branch.
-   Verify the protection rule is active before adding secrets. Do not place
-   these secrets in repository-wide
-   secrets or PR-triggered workflows.
+4. No GitHub Environment, required reviewer, branch deployment policy, or
+   approval gate is used by this workflow. Keep its dispatch condition restricted
+   to `main`; never add a `pull_request` trigger or check out PR code on the
+   self-hosted runner.
 5. Configure repository variables:
    - `GREGORFORGE_PREVIEW_CHECK_ENABLED=true`
    - `GREGORFORGE_PREVIEW_EGRESS_LOCKED=true` only after testing the network
@@ -124,14 +125,9 @@ before dispatching the check.
      path or trailing slash
    - `GREGORFORGE_AUTHORIZED_TARGETS` as a JSON array containing only the exact
      Vercel Preview origin for the PR being checked
-6. Add Environment secrets:
-   - `GREGORFORGE_PREVIEW_PROVIDER_TOKEN`: read-only credential for the
-     provider's one-preview lookup endpoint
-   - `GREGORFORGE_PREVIEW_ATTESTATION_KEY`: random key with at least 32 bytes
-     of entropy, shared securely with the provider. Rotate it if exposed.
-7. Dispatch **Authorized preview security check** from `main`, enter an open
-   PR number, and approve the `preview-scan` environment deployment. The job
-   verifies the PR base, open/non-draft state, current head commit, attestation
+6. Dispatch **Authorized preview security check** from `main` and enter an open
+   PR number. No separate deployment approval is requested. The job verifies
+   the PR base, open/non-draft state, current head commit, attestation
    signature/expiry, exact origin allowlist, and PR head again immediately
    before connecting.
 
@@ -139,6 +135,13 @@ The repository is public. Do not treat the self-hosted runner as a general
 CI worker. If OCI cannot provide independently enforced egress restrictions
 and a one-job runner lifecycle, leave `GREGORFORGE_PREVIEW_CHECK_ENABLED`
 unset and do not register the runner.
+
+Vercel's Git integration creates Preview deployments automatically for pull
+requests and Production deployments for pushes to its configured production
+branch. The repository does not contain a Vercel deployment-approval or branch
+promotion rule. The Docker image publishing workflow is separate: in its
+configured production mirror it now runs its tests first and publishes only
+after they pass; it is not enabled for this public source repository.
 
 ### Preview-provider contract
 

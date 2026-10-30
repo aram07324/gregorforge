@@ -1,0 +1,73 @@
+name: Build & Push GregorForge
+
+# NOTE: This workflow lives in the public core (aram07324/gregorforge) as the single
+# source of truth, and is inherited by the deploy mirror (aram07324/gregorforge-prod)
+# on every sync. Tests run on pushes in both repositories. The image build job is
+# HARD-GATED to the prod repository, so the public repo never grabs its privileged
+# runner, purges Docker resources, or accesses publishing secrets.
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  tests:
+    name: Tests before image deployment
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.2.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5.3.0
+        with:
+          python-version: '3.11'
+
+      - name: Install pytest
+        run: python -m pip install --upgrade pip pytest
+
+      - name: Run MCP regression tests
+        working-directory: mcp
+        run: python -m pytest tests/test_live_push_fixes.py -v
+
+      - name: Run GitHub integration tests
+        run: python -m unittest discover -s tools/github -p "test_*.py" -v
+
+      - name: Run Vercel provider tests
+        run: node --test tools/github/test_vercel_preview_provider.js
+
+  build-opencode:
+    name: Build & Push opencode-gregorforge (x86)
+    runs-on: runner-ovh-prod
+    needs: tests
+    # Deploy ONLY from the prod mirror. The public core never triggers the pipeline.
+    if: ${{ github.repository == 'aram07324/gregorforge-prod' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.2.2
+
+      - name: Purge Docker
+        run: |
+          docker rm -f $(docker ps -aq) 2>/dev/null || true
+          docker rmi -f $(docker images -aq) 2>/dev/null || true
+          docker volume rm $(docker volume ls -q) 2>/dev/null || true
+          docker network rm $(docker network ls -q | grep -v -E '^(bridge|host|none)$') 2>/dev/null || true
+          docker builder prune -a -f 2>/dev/null || true
+
+      - name: Build & Push opencode image
+        run: |
+          mkdir -p /tmp/docker-config
+          echo '{"credsStore":""}' > /tmp/docker-config/config.json
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker --config /tmp/docker-config login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+          docker build -f Dockerfile.opencode \
+            -t aram07324/${{ secrets.OPENCODE_IMAGE_NAME }}:latest \
+            -t aram07324/${{ secrets.OPENCODE_IMAGE_NAME }}:${{ github.sha }} \
+            .
+          docker --config /tmp/docker-config push aram07324/${{ secrets.OPENCODE_IMAGE_NAME }}:latest
+          docker --config /tmp/docker-config push aram07324/${{ secrets.OPENCODE_IMAGE_NAME }}:${{ github.sha }}
