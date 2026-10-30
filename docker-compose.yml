@@ -1,0 +1,129 @@
+name: gregorforge-stack
+
+volumes:
+  gregorforge_opencode:
+  gregorforge_privacy:
+
+networks:
+  toolbox-internal:
+    internal: true
+  mcp-internal:
+    internal: true
+  default: {}
+
+services:
+
+  gregorforge:
+    image: aram07324/gregorforge:latest
+    pull_policy: always
+    container_name: gregorforge
+    user: "0:0"
+    networks:
+      - toolbox-internal
+    environment:
+      - GF_MODE=default
+
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+      - /run:size=16m,mode=755
+      - /opt/gregorforge/out:size=128m,mode=755
+
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    
+    healthcheck:
+      test: ["CMD", "command", "-v", "nuclei"]
+      interval: 30s
+      timeout: 10s
+      start_period: 10s
+      retries: 3
+
+    restart: unless-stopped
+
+
+  mcp:
+    image: aram07324/opencode-gregorforge:latest
+    pull_policy: always
+    container_name: gregorforge-mcp
+    entrypoint:
+      - /usr/local/bin/gregorforge-mcp
+    command: []
+    depends_on:
+      - gregorforge
+    networks:
+      - mcp-internal
+    volumes:
+      # WARNING: /var/run/docker.sock gives FULL container orchestration access.
+      # Alternative: use --socket-activation or a restricted Docker API proxy (e.g., socket-proxy)
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./gregorforge-settings:/root/.config/opencode/:rw
+      - ./gregorforge-settings:/root/.local/share/opencode/:rw
+      - ./gregorforge-authorizations:/root/.config/gregorforge-authorizations/:ro
+      - ./reports:/root/.local/share/opencode/reports/:rw
+      - ./sessions:/root/.local/share/opencode/sessions/:rw
+      - ./workflows:/opt/gregorforge/mcp/server/src/tools/workflows/:ro
+      - gregorforge_privacy:/run/gregorforge-privacy
+    environment:
+      - GREGORFORGE_MCP_TRANSPORT=http
+      - GREGORFORGE_MCP_HOST=0.0.0.0
+      - GREGORFORGE_MCP_PORT=8181
+      - GREGORFORGE_MCP_PATH=/mcp
+      - GREGORFORGE_PRIVACY_TTL=604800
+      - GREGORFORGE_PRIVACY_SOCK=/run/gregorforge-privacy/gregorforge-privacy.sock
+      - GREGORFORGE_GROWTH_DIR=/root/.local/share/opencode/.gregorforge-growth
+      - GREGORFORGE_AUTHORIZATION_FILE=/root/.config/gregorforge-authorizations/authorizations.json
+      - GREGORFORGE_AUTHORIZATION_AUDIT_FILE=/root/.config/opencode/.gregorforge-authorization-audit.json
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8181/mcp", "||" , "exit", "1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 5s
+      retries: 3
+    restart: unless-stopped
+
+
+  opencode:
+    image: aram07324/opencode-gregorforge:latest
+    pull_policy: always
+    container_name: opencode
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+    networks:
+      - default
+      - mcp-internal
+
+    env_file:
+      - ./.opencode.env
+
+    volumes:
+      - ./gregorforge-settings:/root/.config/opencode/:rw
+      - ./gregorforge-settings:/root/.local/share/opencode/:rw
+      - ./gregorforge-settings/agents:/root/.opencode/agents/:rw
+      - ./reports:/root/.local/share/opencode/reports/:rw
+      - ./sessions:/root/.local/share/opencode/sessions/:rw
+      - gregorforge_privacy:/run/gregorforge-privacy
+
+    environment:
+      - TERM=xterm-256color
+      - LANG=C.UTF-8
+      - GREGORFORGE_MCP_SERVER=false
+      - GREGORFORGE_MCP_TRANSPORT=http
+      - GREGORFORGE_PRIVACY_SOCK=/run/gregorforge-privacy/gregorforge-privacy.sock
+      - GREGORFORGE_MCP_HOST=mcp
+      - GREGORFORGE_MCP_PORT=8181
+      - GREGORFORGE_MCP_PATH=/mcp
+    
+    healthcheck:
+      test: ["CMD", "test", "-f", "/usr/local/bin/opencode"]
+      interval: 30s
+      timeout: 10s
+      start_period: 10s
+      retries: 3

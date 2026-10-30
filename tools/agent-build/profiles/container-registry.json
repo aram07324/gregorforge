@@ -1,0 +1,19 @@
+{
+  "id": "container-registry",
+  "description": "Read-only, operator-authorized registry configuration and security-posture review for one explicitly scoped OCI/Docker registry.",
+  "objective": "Review the configuration and evidence supplied by the operator for the explicitly scoped container registry {{TARGET}}. Produce a concise defensive posture report with evidence, limitations, and prioritized remediation. Do not attempt exploitation, access private image content, or change registry state.",
+  "strict_constraints": [
+    "Work only on the exact registry host and organization/project scope explicitly provided and authorized by the operator; never infer targets from leaked artifacts or pivot elsewhere.",
+    "Prefer offline review of operator-supplied configuration. If live checks are explicitly authorized, make at most one unauthenticated GET to /v2/ and one GET to a documented health/version endpoint; do not enumerate catalogs, repositories, tags, or users.",
+    "Do not request, use, mint, validate, or disclose credentials, tokens, or authorization headers. Do not retrieve manifests, blobs, layers, or image contents.",
+    "Never perform POST, PUT, PATCH, DELETE, upload, push, tag, or other state-changing requests; do not test write permissions.",
+    "Do not scan, fuzz, brute-force, bypass authentication, follow redirects to a different host, or make requests outside the explicit scope.",
+    "Do not print or retain secrets. If sensitive values appear in supplied configuration, redact them and recommend rotation without reproducing them.",
+    "Use no concurrency and stop after the approved read-only checks; report unavailable evidence as unknown rather than probing further."
+  ],
+  "preflight": "Before reviewing anything, require an operator-provided registry URL and explicit authorization for that exact host and scope. If either is missing, do not connect. Prefer static review of files explicitly supplied for this task. For an explicitly authorized live check, permit only a single unauthenticated GET to the base /v2/ endpoint and a single GET to a documented health or version endpoint. Do not follow cross-host redirects. Do not use credentials or query catalog, repository, tag, user, manifest, or blob endpoints. Stop if the target is out of scope, unreachable, or requires additional access.",
+  "offensive": "READ-ONLY REVIEW\n\nReview only operator-supplied registry settings and the results of the explicitly permitted health checks. Assess whether TLS is required, anonymous access is intentionally configured, access control is documented, image scanning and retention are enabled, and administrative endpoints are appropriately restricted based solely on supplied evidence. Do not infer access from endpoint responses beyond what they establish: a successful response from /v2/ alone does not demonstrate catalog or image access. Do not attempt authentication, token exchange, enumeration, image retrieval, secret discovery, or write testing. Report each observation with its evidence source and distinguish confirmed facts from unknowns.",
+  "priorities": "Prioritize the defensive report in this order:\n\n1. Misconfigurations evidenced by operator-supplied configuration, such as disabled TLS or overly broad anonymous access settings.\n2. Missing controls or evidence, including documented access policies, image scanning, retention, and audit logging. Mark absent evidence as unknown; do not probe to fill gaps.\n3. For each confirmed issue, give a concise impact statement and a remediation that the registry owner can apply. Never include secret values or steps to exploit the issue.",
+  "stop_note": "STOP after the authorized static review and the explicitly permitted read-only health checks. Do not expand scope, enumerate registry contents, access image data, or perform state-changing requests.",
+  "read_only": true
+}

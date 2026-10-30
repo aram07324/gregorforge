@@ -1,0 +1,75 @@
+# docker-compose.socket-proxy.yml
+# Production security layer: restricts MCP's Docker socket access
+# Usage: docker compose -f docker-compose.yml -f docker-compose.socket-proxy.yml up
+#
+# This setup deploys docker-socket-proxy to filter Docker API calls from the mcp container.
+# Instead of mounting /var/run/docker.sock directly (full API access), the mcp container
+# connects to the proxy, which enforces an allowlist of safe operations.
+
+version: "3.8"
+
+services:
+  # docker-socket-proxy: API firewall between mcp and Docker daemon
+  socket-proxy:
+    image: ghcr.io/tecnativa/docker-socket-proxy:latest
+    container_name: gregorforge-socket-proxy
+    restart: unless-stopped
+    networks:
+      - mcp-internal
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      # ALLOW: operations mcp legitimately needs (adjust as needed)
+      CONTAINERS: 1
+      NETWORKS: 1
+      IMAGES: 0        # mcp should not manage images
+      VOLUMES: 0       # mcp should not manage volumes
+      SERVICES: 0      # mcp should not manage services
+      EXEC: 1          # Allow exec into containers (for agent commands)
+      AUTH: 0          # Deny auth operations
+      BUILD: 0         # Deny build operations
+      COMMIT: 0        # Deny commit operations
+      CONFIGS: 0       # Deny configs
+      DISTRIBUTION: 0  # Deny distribution
+      EVENTS: 1        # Allow events (for logging)
+      INFO: 1          # Allow info queries
+      INSPECT: 1       # Allow inspect
+      KILL: 1          # Allow kill (for forceful termination)
+      LOGS: 1          # Allow logs
+      PAUSE: 1         # Allow pause
+      RENAME: 0        # Deny rename
+      RESTART: 1       # Allow restart
+      SECRETS: 0       # Deny secrets
+      START: 1         # Allow start
+      STATS: 1         # Allow stats
+      STOP: 1          # Allow stop
+      TAG: 0           # Deny tag
+      UNPAUSE: 1       # Allow unpause
+      UPDATE: 0        # Deny update
+      WAIT: 1          # Allow wait
+      POST: 0          # Deny write operations by default (allow above selectively)
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  # mcp: now connects to socket-proxy instead of direct Docker socket
+  mcp:
+    depends_on:
+      socket-proxy:
+        condition: service_started
+    volumes:
+      # REPLACE: /var/run/docker.sock:/var/run/docker.sock
+      # WITH: connection to socket-proxy via network
+      - socket-proxy-sock:/var/run/docker.sock
+    environment:
+      # If mcp uses DOCKER_HOST env var, set it (optional, depends on mcp code)
+      - DOCKER_HOST=unix:///var/run/docker.sock
+
+volumes:
+  socket-proxy-sock:
+    driver: local
+
+networks:
+  mcp-internal:
+    # Uses existing network from main docker-compose.yml
