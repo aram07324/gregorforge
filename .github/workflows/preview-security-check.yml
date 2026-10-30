@@ -1,0 +1,50 @@
+name: Authorized preview security check
+
+on:
+  workflow_dispatch:
+    inputs:
+      pull_request:
+        description: Open pull request number to check
+        required: true
+        type: number
+
+permissions:
+  contents: read
+  pull-requests: read
+  checks: write
+
+concurrency:
+  group: preview-check-${{ github.repository }}-${{ inputs.pull_request }}
+  cancel-in-progress: true
+
+jobs:
+  preview-check:
+    name: Read-only preview security headers
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      vars.GREGORFORGE_PREVIEW_CHECK_ENABLED == 'true' &&
+      vars.GREGORFORGE_PREVIEW_EGRESS_LOCKED == 'true'
+    runs-on: [self-hosted, linux, x64, gregorforge-preview-scan]
+    environment:
+      name: preview-scan
+    timeout-minutes: 5
+    steps:
+      - name: Checkout trusted default-branch code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
+        with:
+          python-version: "3.11"
+      - name: Run attested read-only preview check
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GREGORFORGE_PULL_REQUEST: ${{ inputs.pull_request }}
+          GREGORFORGE_AUTHORIZED_TARGETS: ${{ vars.GREGORFORGE_AUTHORIZED_TARGETS }}
+          GREGORFORGE_PREVIEW_PROVIDER_URL: ${{ vars.GREGORFORGE_PREVIEW_PROVIDER_URL }}
+          GREGORFORGE_PREVIEW_PROVIDER_TOKEN: ${{ secrets.GREGORFORGE_PREVIEW_PROVIDER_TOKEN }}
+          GREGORFORGE_PREVIEW_ATTESTATION_KEY: ${{ secrets.GREGORFORGE_PREVIEW_ATTESTATION_KEY }}
+        run: python tools/github/run_preview_check.py --pull-request "$GREGORFORGE_PULL_REQUEST"

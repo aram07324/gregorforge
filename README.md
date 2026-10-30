@@ -128,11 +128,11 @@ Built for **security teams**, **DevSecOps engineers**, **red teamers** and **eth
 
 Run GregorForge where you already build — in CI/CD, your IDE, automation and SecOps. Integrations marked **OSS + Pro** work with the open-source edition (local CLI + JSON); the Pro-only ones consume the [GregorForge Pro](#-gregorforge-pro--paid-edition-web-dashboard-and-automated-remediation) REST API (live dashboard, remediation→PR).
 
-**GitHub integration scaffold:** the current [Action preflight and App/Marketplace status](docs/github-app-marketplace.md) are experimental. PR runs test the authorization-policy code only; manual runs validate an exact configured HTTPS origin. Neither workflow performs a network scan.
+**Experimental GitHub integration:** pull requests run policy tests only. A separate manually dispatched, protected workflow can perform a single read-only security-header check against an operator-authorized preview after validating a short-lived provider attestation. PR-provided target values are never scanned. See the [security and setup requirements](docs/github-app-marketplace.md).
 
 | Platform | What it does | Get it | Edition | Tutorial |
 |---|---|---|---|---|
-| **GitHub Actions** | Test policy changes and manually validate an exact authorized-target origin; no scanning | [Integration scaffold](docs/github-app-marketplace.md) | OSS | — |
+| **GitHub Actions** | Policy tests; manually approved, read-only preview security-header check | [Experimental setup](docs/github-app-marketplace.md) | OSS | — |
 | **GitLab CI/CD** | Findings as Code Quality + SAST reports | [CI/CD Catalog](https://gitlab.com/explore/catalog/Dark-Moon-X/darkmoon-scan) | OSS + Pro | [▶ Watch](https://youtu.be/ui7NHD41cMM) |
 | **Jenkins** | Findings as Warnings-NG issues in the build | [Plugin `.hpi` (Releases)](https://github.com/ASCIT31/darkmoon-jenkins/releases) | OSS + Pro | [▶ Watch](https://youtu.be/G0TgyGpVLZ8) |
 | **VS Code** | Browse and launch assessments from the editor | [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=Darkmoon.darkmoon-vscode) | OSS + Pro | [▶ Watch](https://youtu.be/GY7YOnYpteQ) |

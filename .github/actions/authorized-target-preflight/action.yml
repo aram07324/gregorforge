@@ -13,6 +13,13 @@ runs:
     - name: Validate authorized target
       shell: bash
       env:
+        ACTION_PATH: ${{ github.action_path }}
         TARGET: ${{ inputs.target }}
         AUTHORIZED_TARGETS: ${{ inputs.authorized-targets }}
-      run: python "${{ github.action_path }}/../../../tools/github/authorize_target.py" --target "$TARGET" --authorized-targets "$AUTHORIZED_TARGETS"
+      run: |
+        python "$ACTION_PATH/../../../tools/github/authorize_target.py" --target "$TARGET" --authorized-targets "$AUTHORIZED_TARGETS"
+        {
+          printf '## GregorForge authorized-target preflight\n\n'
+          printf '%s\n' 'Result: target exactly matches the configured allowlist.'
+          printf '%s\n' 'Network activity: none; this check does not scan.'
+        } >> "$GITHUB_STEP_SUMMARY"

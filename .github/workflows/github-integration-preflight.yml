@@ -5,6 +5,7 @@ on:
     paths:
       - ".github/actions/authorized-target-preflight/**"
       - ".github/workflows/github-integration-preflight.yml"
+      - ".github/workflows/preview-security-check.yml"
       - "tools/github/**"
   workflow_dispatch:
     inputs:
@@ -18,26 +19,44 @@ permissions:
 
 jobs:
   policy-tests:
+    name: Authorized-target policy tests
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Checkout
         uses: actions/checkout@v4.2.2
+        with:
+          persist-credentials: false
       - name: Set up Python
         uses: actions/setup-python@v5.3.0
         with:
           python-version: "3.11"
       - name: Run target-policy tests
+        id: policy-tests
         run: python -m unittest discover -s tools/github -p "test_*.py" -v
+      - name: Write check summary
+        if: always()
+        env:
+          TEST_RESULT: ${{ steps.policy-tests.outcome }}
+        run: |
+          {
+            printf '## GregorForge authorized-target policy\n\n'
+            printf -- '- Policy unit tests: `%s`\n' "$TEST_RESULT"
+            printf -- '- Network access and scans: **not performed**\n'
+            printf -- '- PR-provided values are never used as scan targets.\n'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   manual-target-preflight:
+    name: Manual authorized-target preflight
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Checkout
         uses: actions/checkout@v4.2.2
+        with:
+          persist-credentials: false
       - name: Validate configured authorized target
         uses: ./.github/actions/authorized-target-preflight
         with:

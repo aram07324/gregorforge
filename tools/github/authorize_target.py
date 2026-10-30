@@ -69,12 +69,16 @@ def normalize_origin(value: str) -> str:
 
 
 def authorize_target(target: str, allowlist_json: str) -> str:
+    if not isinstance(allowlist_json, str) or len(allowlist_json) > 16 * 1024:
+        raise TargetPolicyError("authorized-targets exceeds the configured size limit")
     try:
         entries = json.loads(allowlist_json)
     except (TypeError, json.JSONDecodeError) as exc:
         raise TargetPolicyError("authorized-targets must be a JSON array") from exc
     if not isinstance(entries, list) or not entries:
         raise TargetPolicyError("authorized-targets must be a non-empty JSON array")
+    if len(entries) > 100:
+        raise TargetPolicyError("authorized-targets exceeds the configured size limit")
 
     normalized_entries = {normalize_origin(entry) for entry in entries}
     normalized_target = normalize_origin(target)

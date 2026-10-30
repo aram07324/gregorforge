@@ -1,3 +1,4 @@
+import json
 import unittest
 
 from authorize_target import TargetPolicyError, authorize_target, normalize_origin
@@ -52,6 +53,13 @@ class AuthorizeTargetTests(unittest.TestCase):
         for allowlist in ("", "{}", '["https://example.com/path"]', '["*.example.com"]'):
             with self.subTest(allowlist=allowlist), self.assertRaises(TargetPolicyError):
                 authorize_target("https://staging.example.com", allowlist)
+
+    def test_rejects_excessive_allowlist_size(self):
+        with self.assertRaisesRegex(TargetPolicyError, "size limit"):
+            authorize_target(
+                "https://staging.example.com",
+                json.dumps(["https://staging.example.com"] * 101),
+            )
 
 
 if __name__ == "__main__":
